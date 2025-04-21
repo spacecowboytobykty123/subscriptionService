@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/lib/pq v1.10.9
-	github.com/spacecowboytobykty123/subsProto v0.0.0-20250419092512-a7207e4af35d
+	github.com/spacecowboytobykty123/subsProto v0.0.0-20250421124741-bd8f43b33532
 	google.golang.org/grpc v1.71.1
 )
 

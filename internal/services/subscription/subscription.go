@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
 	"subscriptionMService/internal/data"
 	"subscriptionMService/internal/jsonlog"
 	"time"
@@ -15,11 +16,11 @@ type Subscription struct {
 }
 
 type subProvider interface {
-	Subscribe(ctx context.Context, userId int64, planId int32) (int64, bool)
-	ChangeSubPlan(ctx context.Context, userId int64, newPlanId int32) bool
-	Unsubscribe(ctx context.Context, userId int64) bool
+	Subscribe(ctx context.Context, userId int64, planId int32) (int64, subs.Status)
+	ChangeSubPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status
+	Unsubscribe(ctx context.Context, userId int64) subs.Status
 	GetSubDetails(ctx context.Context, userId int64) (int64, int32, string, int32, time.Time)
-	CheckSub(ctx context.Context, userId int64) bool
+	CheckSub(ctx context.Context, userId int64) subs.Status
 }
 
 type planProvider interface {
@@ -40,17 +41,17 @@ func New(
 	}
 }
 
-func (s *Subscription) Subscribe(ctx context.Context, userId int64, planId int32) (int64, bool) {
+func (s *Subscription) Subscribe(ctx context.Context, userId int64, planId int32) (int64, subs.Status) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (s *Subscription) ChangeSubPlan(ctx context.Context, userId int64, newPlanId int32) bool {
+func (s *Subscription) ChangeSubPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (s *Subscription) Unsubscribe(ctx context.Context, userId int64) bool {
+func (s *Subscription) Unsubscribe(ctx context.Context, userId int64) subs.Status {
 	//TODO implement me
 	panic("implement me")
 }
@@ -60,7 +61,7 @@ func (s *Subscription) GetSubDetails(ctx context.Context, userId int64) (int64, 
 	panic("implement me")
 }
 
-func (s *Subscription) CheckSub(ctx context.Context, userId int64) bool {
+func (s *Subscription) CheckSub(ctx context.Context, userId int64) subs.Status {
 	//TODO implement me
 	panic("implement me")
 }
