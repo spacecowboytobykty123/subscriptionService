@@ -22,8 +22,9 @@ type Subscription interface {
 	Subscribe(ctx context.Context, userId int64, planId int32) (int64, subs.Status)
 	ChangeSubPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status
 	Unsubscribe(ctx context.Context, userId int64) subs.Status
-	GetSubDetails(ctx context.Context, userId int64) (int64, int32, string, int32, string)
+	GetSubDetails(ctx context.Context, userId int64) (int32, string, int32, string)
 	CheckSub(ctx context.Context, userId int64) subs.Status
+	ListPlans(ctx context.Context) []subs.Plan
 }
 
 func Register(gRPC *grpc.Server, subscription Subscription) {
@@ -76,15 +77,56 @@ func (s *serverAPI) ChangeSubPlan(ctx context.Context, r *subs.ChangePlanRequest
 }
 
 func (s *serverAPI) Unsubscribe(ctx context.Context, r *subs.UnSubsRequest) (*subs.UnSubsResponse, error) {
-	panic("Implement me!")
+	v := validator.New()
+
+	userId := r.GetUserId()
+	if postgres.ValidateUser(v, userId); !v.Valid() {
+		return nil, collectErrors(v)
+	}
+	resStatus := s.subs.Unsubscribe(ctx, userId)
+	if resStatus != subs.Status_STATUS_OK {
+		return nil, mapStatusToError(resStatus)
+	}
+
+	return &subs.UnSubsResponse{Status: resStatus}, nil
+
 }
 
 func (s *serverAPI) GetSubDetails(ctx context.Context, r *subs.GetSubRequest) (*subs.GetSubResponse, error) {
-	panic("Implement me!")
+	v := validator.New()
+
+	userId := r.GetUserId()
+	if postgres.ValidateUser(v, userId); !v.Valid() {
+		return nil, collectErrors(v)
+	}
+	planId, planName, remainingLimit, expiresAt := s.subs.GetSubDetails(ctx, userId)
+	return &subs.GetSubResponse{
+		UserId:         userId,
+		PlanId:         planId,
+		PlanName:       planName,
+		RemainingLimit: remainingLimit,
+		ExpiresAt:      expiresAt,
+	}, nil
 }
 
 func (s *serverAPI) CheckSub(ctx context.Context, r *subs.CheckSubsRequest) (*subs.CheckSubsResponse, error) {
-	panic("Implement me!")
+	v := validator.New()
+	userId := r.GetUserId()
+	if postgres.ValidateUser(v, userId); !v.Valid() {
+		return nil, collectErrors(v)
+	}
+
+	isSubscribed := s.subs.CheckSub(ctx, userId)
+	return &subs.CheckSubsResponse{SubStatus: isSubscribed}, nil
+}
+
+func (s *serverAPI) ListPlans(ctx context.Context, r *subs.PlansRequest) (*subs.PlansResponse, error) {
+	plans := s.subs.ListPlans(ctx)
+	planPointers := make([]*subs.Plan, len(plans))
+	for i := range plans {
+		planPointers[i] = &plans[i]
+	}
+	return &subs.PlansResponse{Plans: planPointers}, nil
 }
 
 func collectErrors(v *validator.Validator) error {

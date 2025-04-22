@@ -62,8 +62,17 @@ func ValidateSubChange(v *validator.Validator, userID int64, newPlanID int32) {
 	v.Check(newPlanID == emptyValue, "text", "New Plan ID is required!")
 }
 
+func ValidateUser(v *validator.Validator, userID int64) {
+	v.Check(userID == emptyValue, "text", "User ID is required!")
+}
+
 func (s *Storage) Subscribe(ctx context.Context, userID int64, planID int32) (int64, subs.Status) {
-	panic("Do me! Storage Part")
+	query := `
+INSERT INTO subscriptions (user_id, plan_id, remaining_limit, expires_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id`
+
+	args := []any{userID, planID}
 }
 
 func (s *Storage) Unsubscribe(ctx context.Context, userID int64) subs.Status {
@@ -75,7 +84,7 @@ func (s *Storage) ChangeSubPlan(ctx context.Context, userId int64, newPlanId int
 	panic("implement me")
 }
 
-func (s *Storage) GetSubDetails(ctx context.Context, userId int64) (int64, int32, string, int32, time.Time) {
+func (s *Storage) GetSubDetails(ctx context.Context, userId int64) (int32, string, int32, time.Time) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -85,7 +94,7 @@ func (s *Storage) CheckSub(ctx context.Context, userId int64) subs.Status {
 	panic("implement me")
 }
 
-func (s *Storage) ListPlans(ctx context.Context) []*data.Plan {
+func (s *Storage) ListPlans(ctx context.Context) []subs.Plan {
 	//TODO implement me
 	panic("implement me")
 }
