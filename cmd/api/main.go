@@ -5,6 +5,7 @@ import (
 	_ "github.com/lib/pq"
 	"os"
 	"os/signal"
+	"strconv"
 	"subscriptionMService/internal/app/grpcapp"
 	"subscriptionMService/internal/jsonlog"
 	"subscriptionMService/internal/services/subscription"
@@ -47,14 +48,18 @@ func main() {
 	flag.IntVar(&cfg.DB.MaxIdleConns, "db-max-Idle-conns", 25, "PostgresSQL max Idle connections")
 	flag.StringVar(&cfg.DB.MaxIdleTime, "db-max-Idle-time", "15m", "PostgresSQl max Idle time")
 
+	flag.IntVar(&cfg.GRPC.Port, "grpc-port", 3000, "grpc-port")
+	flag.DurationVar(&cfg.TokenTTL, "token-ttl", time.Hour, "GRPC's work duration")
+
 	flag.Parse()
 
 	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
 
-	logger.PrintInfo("connection pool established", nil)
-
 	app := New(logger, cfg.GRPC.Port, cfg, cfg.TokenTTL)
 
+	logger.PrintInfo("connection pool established", map[string]string{
+		"port": strconv.Itoa(cfg.GRPC.Port),
+	})
 	go app.GRPCSrv.MustRun()
 
 	stop := make(chan os.Signal, 1)
@@ -75,7 +80,7 @@ func New(log *jsonlog.Logger, grpcPort int, cfg Config, tokenTTL time.Duration) 
 		log.PrintFatal(err, nil)
 	}
 
-	defer db.Close()
+	// defer db.Close()
 
 	subscriptionService := subscription.New(log, db, db, tokenTTL)
 	grpcApp := grpcapp.New(log, grpcPort, subscriptionService) // добавить сервис

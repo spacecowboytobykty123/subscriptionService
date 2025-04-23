@@ -20,7 +20,7 @@ type serverAPI struct {
 
 type Subscription interface {
 	Subscribe(ctx context.Context, userId int64, planId int32) (int64, subs.Status)
-	ChangeSubPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status
+	ChangeSubsPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status
 	Unsubscribe(ctx context.Context, userId int64) subs.Status
 	GetSubDetails(ctx context.Context, userId int64) (int32, string, int32, string)
 	CheckSub(ctx context.Context, userId int64) subs.Status
@@ -56,7 +56,7 @@ func (s *serverAPI) Subscribe(ctx context.Context, r *subs.SubsRequest) (*subs.S
 	}, nil
 }
 
-func (s *serverAPI) ChangeSubPlan(ctx context.Context, r *subs.ChangePlanRequest) (*subs.ChangePlanResponse, error) {
+func (s *serverAPI) ChangeSubsPlan(ctx context.Context, r *subs.ChangePlanRequest) (*subs.ChangePlanResponse, error) {
 	v := validator.New()
 
 	UserID := r.GetUserId()
@@ -66,7 +66,7 @@ func (s *serverAPI) ChangeSubPlan(ctx context.Context, r *subs.ChangePlanRequest
 		return nil, collectErrors(v)
 	}
 
-	resStatus := s.subs.ChangeSubPlan(ctx, UserID, NewPlanID)
+	resStatus := s.subs.ChangeSubsPlan(ctx, UserID, NewPlanID)
 
 	if resStatus != subs.Status_STATUS_OK {
 		return nil, s.MapStatusToError(resStatus)

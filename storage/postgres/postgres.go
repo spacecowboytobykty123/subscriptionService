@@ -55,13 +55,13 @@ func (s *Storage) Close() error {
 }
 
 func ValidateSubscription(v *validator.Validator, subscription *data.Subscription) {
-	v.Check(subscription.UserID == emptyValue, "text", "User ID is required!")
-	v.Check(subscription.PlanID == emptyValue, "text", "Plan ID is required!")
+	v.Check(subscription.UserID != emptyValue, "text", "User ID is required!")
+	v.Check(subscription.PlanID != emptyValue, "text", "Plan ID is required!")
 }
 
 func ValidateSubChange(v *validator.Validator, userID int64, newPlanID int32) {
-	v.Check(userID == emptyValue, "text", "User ID is required!")
-	v.Check(newPlanID == emptyValue, "text", "New Plan ID is required!")
+	v.Check(userID != emptyValue, "text", "User ID is required!")
+	v.Check(newPlanID != emptyValue, "text", "New Plan ID is required!")
 }
 
 func ValidateUser(v *validator.Validator, userID int64) {
@@ -78,6 +78,7 @@ RETURNING id`
 	expiresAt := addMonths(time.Now(), durationMonths)
 
 	if err != nil {
+		println(err.Error())
 		return 0, subs.Status_STATUS_INTERNAL_ERROR
 	}
 
@@ -86,16 +87,18 @@ RETURNING id`
 
 	var subId int64
 	args := []any{userID, planID, limit, expiresAt}
-	status := s.db.QueryRowContext(ctx, query, args).Scan(&subId)
+	status := s.db.QueryRowContext(ctx, query, args...).Scan(&subId)
 	if status != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			return 0, subs.Status_STATUS_NOT_SUBSCRIBED // TODO: change it to subID not found
 		default:
+			println(err.Error())
 			return 0, subs.Status_STATUS_INTERNAL_ERROR
 		}
 
 	}
+	println("db part")
 
 	return subId, subs.Status_STATUS_OK
 
@@ -124,14 +127,14 @@ WHERE user_id = $1
 	return subs.Status_STATUS_OK
 }
 
-func (s *Storage) ChangeSubPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status {
+func (s *Storage) ChangeSubsPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status {
 	query := `
 UPDATE subscriptions
 SET plan_id = $1
 WHERE user_id = $2
 RETURNING id
 `
-	args := []any{userId, newPlanId}
+	args := []any{newPlanId, userId}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
