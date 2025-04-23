@@ -47,9 +47,9 @@ func (s *serverAPI) Subscribe(ctx context.Context, r *subs.SubsRequest) (*subs.S
 	}
 
 	subID, isCompleted := s.subs.Subscribe(ctx, UserID, PlanID)
-	if isCompleted != subs.Status_STATUS_OK {
-		return nil, mapStatusToError(isCompleted)
-	}
+
+	// TODO: Отправить сообщение на почту
+
 	return &subs.SubsResponse{
 		SubId:  subID,
 		Status: isCompleted,
@@ -69,7 +69,7 @@ func (s *serverAPI) ChangeSubPlan(ctx context.Context, r *subs.ChangePlanRequest
 	resStatus := s.subs.ChangeSubPlan(ctx, UserID, NewPlanID)
 
 	if resStatus != subs.Status_STATUS_OK {
-		return nil, mapStatusToError(resStatus)
+		return nil, s.MapStatusToError(resStatus)
 	}
 
 	return &subs.ChangePlanResponse{Status: resStatus}, nil
@@ -85,7 +85,7 @@ func (s *serverAPI) Unsubscribe(ctx context.Context, r *subs.UnSubsRequest) (*su
 	}
 	resStatus := s.subs.Unsubscribe(ctx, userId)
 	if resStatus != subs.Status_STATUS_OK {
-		return nil, mapStatusToError(resStatus)
+		return nil, s.MapStatusToError(resStatus)
 	}
 
 	return &subs.UnSubsResponse{Status: resStatus}, nil
@@ -137,7 +137,7 @@ func collectErrors(v *validator.Validator) error {
 	return status.Error(codes.InvalidArgument, b.String())
 }
 
-func mapStatusToError(code subs.Status) error {
+func (s *serverAPI) MapStatusToError(code subs.Status) error {
 	switch code {
 	case subs.Status_STATUS_INVALID_PLAN:
 		return status.Error(codes.InvalidArgument, "Invalid plan")

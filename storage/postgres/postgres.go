@@ -128,7 +128,7 @@ func (s *Storage) ChangeSubPlan(ctx context.Context, userId int64, newPlanId int
 	query := `
 UPDATE subscriptions
 SET plan_id = $1
-WHERE user_id = 2$
+WHERE user_id = $2
 RETURNING id
 `
 	args := []any{userId, newPlanId}
@@ -151,13 +151,53 @@ RETURNING id
 
 func (s *Storage) GetSubDetails(ctx context.Context, userId int64) (int32, string, int32, time.Time) {
 	query := `
-SELECT 
+SELECT plan_id, remaining_limit, expires_at FROM subscriptions
+WHERE user_id = $1
 `
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var planId, remainingLimit int32
+	var expires_at time.Time
+
+	err := s.db.QueryRowContext(ctx, query, userId).Scan(&planId, &remainingLimit, &expires_at)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return 0, "", 0, expires_at
+		default:
+			return 0, "", 0, expires_at
+		}
+	}
+	planName, err := s.getNameFromPlan(planId)
+	if err != nil {
+		return 0, "", 0, expires_at
+	}
+
+	return planId, planName, remainingLimit, expires_at
 }
 
 func (s *Storage) CheckSub(ctx context.Context, userId int64) subs.Status {
-	//TODO implement me
-	panic("implement me")
+	query := `
+SELECT status FROM subscriptions
+WHERE user_id = $1
+`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var subStatus string
+
+	err := s.db.QueryRowContext(ctx, query, userId).Scan(&subStatus)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return subs.Status_STATUS_INVALID_USER
+		default:
+			return subs.Status_STATUS_INTERNAL_ERROR
+		}
+	}
+
+	return stringToSubsStatus(subStatus)
+
 }
 
 func (s *Storage) ListPlans(ctx context.Context) []subs.Plan {
@@ -179,12 +219,12 @@ SELECT name, desc, rental_limit, price, duration_months FROM subscription_plans
 		var plan subs.Plan
 
 		err := rows.Scan(
-			plan.PlanId,
-			plan.Name,
-			plan.Description,
-			plan.RentalLimit,
-			plan.Price,
-			plan.Duration,
+			&plan.PlanId,
+			&plan.Name,
+			&plan.Description,
+			&plan.RentalLimit,
+			&plan.Price,
+			&plan.Duration,
 		)
 
 		if err != nil {
@@ -224,6 +264,37 @@ WHERE id = $1
 
 	return rentalLimit, durationsMonths, nil
 
+}
+
+func (s *Storage) getNameFromPlan(planId int32) (string, error) {
+	query := `
+SELECT name FROM subscription_plans
+WHERE id = $1
+`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var planName string
+
+	err := s.db.QueryRowContext(ctx, query, planId).Scan(&planName)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return "", fmt.Errorf("%s:%d", "storage.postgres.getLimitFromId", ErrPlanNotFound)
+		default:
+			return "", fmt.Errorf("%s:%d", "storage.postgres.getLimitFromId", err)
+		}
+	}
+
+	return planName, nil
+
+}
+
+func stringToSubsStatus(status string) subs.Status {
+	if status == "active" {
+		return subs.Status_STATUS_SUBSCRIBED
+	} else {
+		return subs.Status_STATUS_NOT_SUBSCRIBED
+	}
 }
 
 func addMonths(t time.Time, months subs.Duration) time.Time {
