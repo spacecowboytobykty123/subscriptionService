@@ -7,8 +7,6 @@ import (
 	"fmt"
 	_ "github.com/lib/pq"
 	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
-	"subscriptionMService/internal/data"
-	"subscriptionMService/internal/validator"
 	"time"
 )
 
@@ -54,20 +52,6 @@ func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
-func ValidateSubscription(v *validator.Validator, subscription *data.Subscription) {
-	v.Check(subscription.UserID != emptyValue, "text", "User ID is required!")
-	v.Check(subscription.PlanID != emptyValue, "text", "Plan ID is required!")
-}
-
-func ValidateSubChange(v *validator.Validator, userID int64, newPlanID int32) {
-	v.Check(userID != emptyValue, "text", "User ID is required!")
-	v.Check(newPlanID != emptyValue, "text", "New Plan ID is required!")
-}
-
-func ValidateUser(v *validator.Validator, userID int64) {
-	v.Check(userID == emptyValue, "text", "User ID is required!")
-}
-
 func (s *Storage) Subscribe(ctx context.Context, userID int64, planID int32) (int64, subs.Status) {
 	query := `
 INSERT INTO subscriptions (user_id, plan_id, remaining_limit, expires_at)
@@ -90,10 +74,10 @@ RETURNING id`
 	status := s.db.QueryRowContext(ctx, query, args...).Scan(&subId)
 	if status != nil {
 		switch {
-		case errors.Is(err, sql.ErrNoRows):
+		case errors.Is(status, sql.ErrNoRows):
 			return 0, subs.Status_STATUS_NOT_SUBSCRIBED // TODO: change it to subID not found
 		default:
-			println(err.Error())
+			println(status.Error())
 			return 0, subs.Status_STATUS_INTERNAL_ERROR
 		}
 
@@ -180,7 +164,7 @@ WHERE user_id = $1
 	return planId, planName, remainingLimit, expires_at
 }
 
-func (s *Storage) CheckSub(ctx context.Context, userId int64) subs.Status {
+func (s *Storage) CheckSubscription(ctx context.Context, userId int64) subs.Status {
 	query := `
 SELECT status FROM subscriptions
 WHERE user_id = $1
@@ -193,7 +177,7 @@ WHERE user_id = $1
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return subs.Status_STATUS_INVALID_USER
+			return subs.Status_STATUS_NOT_SUBSCRIBED
 		default:
 			return subs.Status_STATUS_INTERNAL_ERROR
 		}
@@ -203,9 +187,9 @@ WHERE user_id = $1
 
 }
 
-func (s *Storage) ListPlans(ctx context.Context) []subs.Plan {
+func (s *Storage) ListPlans(ctx context.Context) []*subs.Plan {
 	query := `
-SELECT name, desc, rental_limit, price, duration_months FROM subscription_plans 
+SELECT id, name, description, rental_limit, price, duration_months FROM subscription_plans 
 `
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -216,7 +200,7 @@ SELECT name, desc, rental_limit, price, duration_months FROM subscription_plans
 	}
 	defer rows.Close()
 
-	plans := []subs.Plan{}
+	plans := []*subs.Plan{}
 
 	for rows.Next() {
 		var plan subs.Plan
@@ -234,7 +218,7 @@ SELECT name, desc, rental_limit, price, duration_months FROM subscription_plans
 			return nil
 		}
 
-		plans = append(plans, plan)
+		plans = append(plans, &plan)
 	}
 
 	if err = rows.Err(); err != nil {

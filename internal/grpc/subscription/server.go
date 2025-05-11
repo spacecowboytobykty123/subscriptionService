@@ -8,9 +8,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strings"
-	"subscriptionMService/internal/data"
+	"subscriptionMService/internal/contextkeys"
 	"subscriptionMService/internal/validator"
-	"subscriptionMService/storage/postgres"
 )
 
 type serverAPI struct {
@@ -19,12 +18,12 @@ type serverAPI struct {
 }
 
 type Subscription interface {
-	Subscribe(ctx context.Context, userId int64, planId int32) (int64, subs.Status)
-	ChangeSubsPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status
-	Unsubscribe(ctx context.Context, userId int64) subs.Status
-	GetSubDetails(ctx context.Context, userId int64) (int32, string, int32, string)
-	CheckSub(ctx context.Context, userId int64) subs.Status
-	ListPlans(ctx context.Context) []subs.Plan
+	Subscribe(ctx context.Context, planId int32) (int64, subs.Status)
+	ChangeSubsPlan(ctx context.Context, newPlanId int32) subs.Status
+	Unsubscribe(ctx context.Context) subs.Status
+	GetSubDetails(ctx context.Context) (int32, string, int32, string)
+	CheckSubscription(ctx context.Context) subs.Status
+	ListPlans(ctx context.Context) []*subs.Plan
 }
 
 func Register(gRPC *grpc.Server, subscription Subscription) {
@@ -34,19 +33,15 @@ func Register(gRPC *grpc.Server, subscription Subscription) {
 func (s *serverAPI) Subscribe(ctx context.Context, r *subs.SubsRequest) (*subs.SubsResponse, error) {
 	v := validator.New()
 
-	UserID := r.GetUserId()
-	PlanID := r.GetPlanId()
+	planID := r.GetPlanId()
 
-	subscription := data.Subscription{
-		UserID: UserID,
-		PlanID: PlanID,
-	}
+	v.Check(planID != 0, "text", "plan_id not found or invalid")
 
-	if postgres.ValidateSubscription(v, &subscription); !v.Valid() {
+	if !v.Valid() {
 		return nil, collectErrors(v)
 	}
 
-	subID, isCompleted := s.subs.Subscribe(ctx, UserID, PlanID)
+	subID, isCompleted := s.subs.Subscribe(ctx, planID)
 
 	// TODO: Отправить сообщение на почту
 
@@ -59,14 +54,15 @@ func (s *serverAPI) Subscribe(ctx context.Context, r *subs.SubsRequest) (*subs.S
 func (s *serverAPI) ChangeSubsPlan(ctx context.Context, r *subs.ChangePlanRequest) (*subs.ChangePlanResponse, error) {
 	v := validator.New()
 
-	UserID := r.GetUserId()
 	NewPlanID := r.GetNewPlanId()
 
-	if postgres.ValidateSubChange(v, UserID, NewPlanID); !v.Valid() {
+	v.Check(NewPlanID != 0, "text", "plan_id not found or invalid")
+
+	if !v.Valid() {
 		return nil, collectErrors(v)
 	}
 
-	resStatus := s.subs.ChangeSubsPlan(ctx, UserID, NewPlanID)
+	resStatus := s.subs.ChangeSubsPlan(ctx, NewPlanID)
 
 	if resStatus != subs.Status_STATUS_OK {
 		return nil, s.MapStatusToError(resStatus)
@@ -77,13 +73,7 @@ func (s *serverAPI) ChangeSubsPlan(ctx context.Context, r *subs.ChangePlanReques
 }
 
 func (s *serverAPI) Unsubscribe(ctx context.Context, r *subs.UnSubsRequest) (*subs.UnSubsResponse, error) {
-	v := validator.New()
-
-	userId := r.GetUserId()
-	if postgres.ValidateUser(v, userId); !v.Valid() {
-		return nil, collectErrors(v)
-	}
-	resStatus := s.subs.Unsubscribe(ctx, userId)
+	resStatus := s.subs.Unsubscribe(ctx)
 	if resStatus != subs.Status_STATUS_OK {
 		return nil, s.MapStatusToError(resStatus)
 	}
@@ -93,15 +83,14 @@ func (s *serverAPI) Unsubscribe(ctx context.Context, r *subs.UnSubsRequest) (*su
 }
 
 func (s *serverAPI) GetSubDetails(ctx context.Context, r *subs.GetSubRequest) (*subs.GetSubResponse, error) {
-	v := validator.New()
-
-	userId := r.GetUserId()
-	if postgres.ValidateUser(v, userId); !v.Valid() {
-		return nil, collectErrors(v)
+	userIDRaw := ctx.Value(contextkeys.UserIDKey)
+	userID, ok := userIDRaw.(int64)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "user_id not found or invalid")
 	}
-	planId, planName, remainingLimit, expiresAt := s.subs.GetSubDetails(ctx, userId)
+	planId, planName, remainingLimit, expiresAt := s.subs.GetSubDetails(ctx)
 	return &subs.GetSubResponse{
-		UserId:         userId,
+		UserId:         userID,
 		PlanId:         planId,
 		PlanName:       planName,
 		RemainingLimit: remainingLimit,
@@ -109,14 +98,8 @@ func (s *serverAPI) GetSubDetails(ctx context.Context, r *subs.GetSubRequest) (*
 	}, nil
 }
 
-func (s *serverAPI) CheckSub(ctx context.Context, r *subs.CheckSubsRequest) (*subs.CheckSubsResponse, error) {
-	v := validator.New()
-	userId := r.GetUserId()
-	if postgres.ValidateUser(v, userId); !v.Valid() {
-		return nil, collectErrors(v)
-	}
-
-	isSubscribed := s.subs.CheckSub(ctx, userId)
+func (s *serverAPI) CheckSubscription(ctx context.Context, r *subs.CheckSubsRequest) (*subs.CheckSubsResponse, error) {
+	isSubscribed := s.subs.CheckSubscription(ctx)
 	return &subs.CheckSubsResponse{SubStatus: isSubscribed}, nil
 }
 
@@ -124,7 +107,7 @@ func (s *serverAPI) ListPlans(ctx context.Context, r *subs.PlansRequest) (*subs.
 	plans := s.subs.ListPlans(ctx)
 	planPointers := make([]*subs.Plan, len(plans))
 	for i := range plans {
-		planPointers[i] = &plans[i]
+		planPointers[i] = plans[i]
 	}
 	return &subs.PlansResponse{Plans: planPointers}, nil
 }

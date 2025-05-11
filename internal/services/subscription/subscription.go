@@ -7,14 +7,16 @@ import (
 	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"subscriptionMService/internal/contextkeys"
 	"subscriptionMService/internal/jsonlog"
+	"subscriptionMService/internal/planCache"
 	"time"
 )
 
 type Subscription struct {
 	log          *jsonlog.Logger
 	subProvider  subProvider
-	planProvider planProvider
+	planProvider planCache.PlanProvider
 	tokenTTL     time.Duration
 }
 
@@ -23,17 +25,17 @@ type subProvider interface {
 	ChangeSubsPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status
 	Unsubscribe(ctx context.Context, userId int64) subs.Status
 	GetSubDetails(ctx context.Context, userId int64) (int32, string, int32, time.Time)
-	CheckSub(ctx context.Context, userId int64) subs.Status
+	CheckSubscription(ctx context.Context, userId int64) subs.Status
 }
 
-type planProvider interface {
-	ListPlans(ctx context.Context) []subs.Plan
-}
+//type planProvider interface {
+//	ListPlans(ctx context.Context) []*subs.Plan
+//}
 
 func New(
 	log *jsonlog.Logger,
 	subProvider subProvider,
-	planProvider planProvider,
+	planProvider planCache.PlanProvider,
 	tokenTTL time.Duration,
 ) *Subscription {
 	return &Subscription{
@@ -44,10 +46,14 @@ func New(
 	}
 }
 
-func (s *Subscription) Subscribe(ctx context.Context, userId int64, planId int32) (int64, subs.Status) {
+func (s *Subscription) Subscribe(ctx context.Context, planId int32) (int64, subs.Status) {
 	s.log.PrintInfo("Attempting to subscribe user", nil)
+	userId, err := getUserFromContext(ctx)
+	if err != nil {
+		return 0, subs.Status_STATUS_INVALID_USER
+	}
 
-	isSubscribed := s.subProvider.CheckSub(ctx, userId)
+	isSubscribed := s.subProvider.CheckSubscription(ctx, userId)
 	if isSubscribed == subs.Status_STATUS_SUBSCRIBED {
 		return 0, subs.Status_STATUS_ALREADY_SUBSCRIBED
 	}
@@ -64,18 +70,26 @@ func (s *Subscription) Subscribe(ctx context.Context, userId int64, planId int32
 	return subId, subStatus
 }
 
-func (s *Subscription) ChangeSubsPlan(ctx context.Context, userId int64, newPlanId int32) subs.Status {
+func (s *Subscription) ChangeSubsPlan(ctx context.Context, newPlanId int32) subs.Status {
 	s.log.PrintInfo("Attempting change subscription plan", nil)
+	userId, err := getUserFromContext(ctx)
+	if err != nil {
+		return subs.Status_STATUS_INVALID_USER
+	}
 
 	isCompleted := s.subProvider.ChangeSubsPlan(ctx, userId, newPlanId)
 
 	return isCompleted
 }
 
-func (s *Subscription) Unsubscribe(ctx context.Context, userId int64) subs.Status {
+func (s *Subscription) Unsubscribe(ctx context.Context) subs.Status {
 	s.log.PrintInfo("Attempting to unsubscribe user", nil)
+	userId, err := getUserFromContext(ctx)
+	if err != nil {
+		return subs.Status_STATUS_INVALID_USER
+	}
 
-	isSubscribed := s.subProvider.CheckSub(ctx, userId)
+	isSubscribed := s.subProvider.CheckSubscription(ctx, userId)
 	if isSubscribed == subs.Status_STATUS_NOT_SUBSCRIBED {
 		return subs.Status_STATUS_NOT_SUBSCRIBED
 	}
@@ -94,9 +108,13 @@ func (s *Subscription) Unsubscribe(ctx context.Context, userId int64) subs.Statu
 
 }
 
-func (s *Subscription) GetSubDetails(ctx context.Context, userId int64) (int32, string, int32, string) {
+func (s *Subscription) GetSubDetails(ctx context.Context) (int32, string, int32, string) {
 
-	isSubscribed := s.subProvider.CheckSub(ctx, userId)
+	userId, err := getUserFromContext(ctx)
+	if err != nil {
+		return 0, "", 0, ""
+	}
+	isSubscribed := s.subProvider.CheckSubscription(ctx, userId)
 	if isSubscribed == subs.Status_STATUS_NOT_SUBSCRIBED {
 		return 0, "", 0, ""
 	}
@@ -108,19 +126,23 @@ func (s *Subscription) GetSubDetails(ctx context.Context, userId int64) (int32, 
 	return planId, planName, remainingLimit, expiresAt.Format(time.RFC3339)
 }
 
-func (s *Subscription) CheckSub(ctx context.Context, userId int64) subs.Status {
+func (s *Subscription) CheckSubscription(ctx context.Context) subs.Status {
+	userId, err := getUserFromContext(ctx)
+	if err != nil {
+		return subs.Status_STATUS_INVALID_USER
+	}
 	s.log.PrintInfo("Checking if user is subscribed", map[string]string{
 		"userId": fmt.Sprint(userId),
 	})
 
-	isSubscribed := s.subProvider.CheckSub(ctx, userId)
+	isSubscribed := s.subProvider.CheckSubscription(ctx, userId)
 	if isSubscribed != subs.Status_STATUS_SUBSCRIBED {
 		s.log.PrintInfo("User not subscribed", nil)
 	}
 	return isSubscribed
 }
 
-func (s *Subscription) ListPlans(ctx context.Context) []subs.Plan {
+func (s *Subscription) ListPlans(ctx context.Context) []*subs.Plan {
 	s.log.PrintInfo("Listing available plans", nil)
 
 	plans := s.planProvider.ListPlans(ctx)
@@ -143,4 +165,15 @@ func (s *Subscription) MapStatusToError(code subs.Status) error {
 	default:
 		return status.Error(codes.Internal, "Internal error")
 	}
+}
+
+func getUserFromContext(ctx context.Context) (int64, error) {
+	val := ctx.Value(contextkeys.UserIDKey)
+	userID, ok := val.(int64)
+	if !ok {
+		return 0, status.Error(codes.Unauthenticated, "user id is missing or invalid in context")
+	}
+
+	return userID, nil
+
 }

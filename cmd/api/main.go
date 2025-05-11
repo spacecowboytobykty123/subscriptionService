@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"subscriptionMService/internal/app/grpcapp"
 	"subscriptionMService/internal/jsonlog"
+	"subscriptionMService/internal/planCache"
 	"subscriptionMService/internal/services/subscription"
 	"subscriptionMService/storage/postgres"
 	"syscall"
@@ -80,9 +81,11 @@ func New(log *jsonlog.Logger, grpcPort int, cfg Config, tokenTTL time.Duration) 
 		log.PrintFatal(err, nil)
 	}
 
-	// defer db.Close()
+	defer db.Close()
 
-	subscriptionService := subscription.New(log, db, db, tokenTTL)
+	planCacheProvider := planCache.NewCachedPlanProvider(db, tokenTTL)
+
+	subscriptionService := subscription.New(log, db, planCacheProvider, tokenTTL)
 	grpcApp := grpcapp.New(log, grpcPort, subscriptionService) // добавить сервис
 
 	return &Application{GRPCSrv: grpcApp}

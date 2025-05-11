@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     remaining_limit INT NOT NULL CHECK (remaining_limit > 0),
     expires_at TIMESTAMP NOT NULL CHECK (expires_at > NOW())
     status VARCHAR(20) NOT NULL DEFAULT 'active'
-    CHECK (status IN ('active', 'cancelled', 'expired', 'paused'))
+        CHECK (status IN ('active', 'cancelled', 'expired', 'paused'))
 )
