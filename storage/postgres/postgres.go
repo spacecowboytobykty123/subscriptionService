@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/lib/pq"
-	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
+	subs "github.com/spacecowboytobykty123/subsProto/proto/gen/go/subscription"
 	"time"
 )
 
@@ -86,6 +86,45 @@ RETURNING id`
 
 	return subId, subs.Status_STATUS_OK
 
+}
+
+func (s *Storage) ExtractFromBalance(ctx context.Context, value int64, userId int64) (subs.Status, string, int64) {
+	query := `UPDATE subscriptions
+SET remaining_limit = remaining_limit - $1
+WHERE user_id = $2 AND remaining_limit >= $1
+RETURNING remaining_limit
+`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var remaining_limit int64
+
+	err := s.db.QueryRowContext(ctx, query, value, userId).Scan(&remaining_limit)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return subs.Status_STATUS_INTERNAL_ERROR, "not enough money to buy!", 0
+		default:
+			return subs.Status_STATUS_INTERNAL_ERROR, "internal error!", 0
+		}
+	}
+	return subs.Status_STATUS_OK, "extracting from balance was successful!", remaining_limit
+}
+
+func (s *Storage) AddToBalance(ctx context.Context, value int64, userId int64) (subs.Status, string, int64) {
+	query := `UPDATE subscriptions
+SET remaining_limit = remaining_limit + $1
+WHERE user_id = $2 
+RETURNING remaining_limit
+`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var remaining_limit int64
+
+	err := s.db.QueryRowContext(ctx, query, value, userId).Scan(&remaining_limit)
+	if err != nil {
+		return subs.Status_STATUS_INTERNAL_ERROR, "internal error!", 0
+	}
+	return subs.Status_STATUS_OK, "adding to balance was successful!", remaining_limit
 }
 
 func (s *Storage) Unsubscribe(ctx context.Context, userID int64) subs.Status {
@@ -169,6 +208,7 @@ func (s *Storage) CheckSubscription(ctx context.Context, userId int64) subs.Stat
 SELECT status FROM subscriptions
 WHERE user_id = $1
 `
+	println(userId)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var subStatus string

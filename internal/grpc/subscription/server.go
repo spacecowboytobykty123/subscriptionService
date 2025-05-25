@@ -3,7 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
-	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
+	subs "github.com/spacecowboytobykty123/subsProto/proto/gen/go/subscription"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,6 +24,8 @@ type Subscription interface {
 	GetSubDetails(ctx context.Context) (int32, string, int32, string)
 	CheckSubscription(ctx context.Context) subs.Status
 	ListPlans(ctx context.Context) []*subs.Plan
+	ExtractFromBalance(ctx context.Context, value int64) (subs.Status, string, int64)
+	AddToBalance(ctx context.Context, value int64) (subs.Status, string, int64)
 }
 
 func Register(gRPC *grpc.Server, subscription Subscription) {
@@ -48,6 +50,41 @@ func (s *serverAPI) Subscribe(ctx context.Context, r *subs.SubsRequest) (*subs.S
 	return &subs.SubsResponse{
 		SubId:  subID,
 		Status: isCompleted,
+	}, nil
+}
+
+func (s *serverAPI) ExtractFromBalance(ctx context.Context, r *subs.ExtractFromBalanceRequest) (*subs.ExtractFromBalanceResponse, error) {
+	value := r.GetValue()
+	if value == 0 {
+		return nil, fmt.Errorf("value cannot be 0!")
+	}
+
+	opStatus, msg, valueLeft := s.subs.ExtractFromBalance(ctx, value)
+	if opStatus != subs.Status_STATUS_OK {
+		return nil, s.MapStatusToError(opStatus)
+	}
+
+	return &subs.ExtractFromBalanceResponse{
+		OpStatus: opStatus,
+		Msg:      msg,
+		Left:     valueLeft,
+	}, nil
+}
+
+func (s *serverAPI) AddFromBalance(ctx context.Context, r *subs.AddToBalanceRequest) (*subs.AddToBalanceResponse, error) {
+	value := r.GetValue()
+	if value == 0 {
+		return nil, fmt.Errorf("value cannot be 0!")
+	}
+
+	opStatus, msg, valueLeft := s.subs.AddToBalance(ctx, value)
+	if opStatus != subs.Status_STATUS_OK {
+		return nil, s.MapStatusToError(opStatus)
+	}
+	return &subs.AddToBalanceResponse{
+		OpStatus: opStatus,
+		Msg:      msg,
+		Left:     valueLeft,
 	}, nil
 }
 
@@ -100,6 +137,10 @@ func (s *serverAPI) GetSubDetails(ctx context.Context, r *subs.GetSubRequest) (*
 
 func (s *serverAPI) CheckSubscription(ctx context.Context, r *subs.CheckSubsRequest) (*subs.CheckSubsResponse, error) {
 	isSubscribed := s.subs.CheckSubscription(ctx)
+	println(isSubscribed.String())
+	if isSubscribed == subs.Status_STATUS_INTERNAL_ERROR {
+		return nil, s.MapStatusToError(isSubscribed)
+	}
 	return &subs.CheckSubsResponse{SubStatus: isSubscribed}, nil
 }
 
