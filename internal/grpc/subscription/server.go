@@ -3,7 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
-	subs "github.com/spacecowboytobykty123/subsProto/proto/gen/go/subscription"
+	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -71,7 +71,7 @@ func (s *serverAPI) ExtractFromBalance(ctx context.Context, r *subs.ExtractFromB
 	}, nil
 }
 
-func (s *serverAPI) AddFromBalance(ctx context.Context, r *subs.AddToBalanceRequest) (*subs.AddToBalanceResponse, error) {
+func (s *serverAPI) AddToBalance(ctx context.Context, r *subs.AddToBalanceRequest) (*subs.AddToBalanceResponse, error) {
 	value := r.GetValue()
 	if value == 0 {
 		return nil, fmt.Errorf("value cannot be 0!")

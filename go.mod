@@ -8,7 +8,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/lib/pq v1.10.9
 	github.com/spacecowboytobykty123/bucketProto v0.0.0-20250524131200-4d68350e8fb4
-	github.com/spacecowboytobykty123/subsProto v0.0.0-20250525131534-55156c5f8a5d
+	github.com/spacecowboytobykty123/subsProto v0.0.0-20250525164154-7f9b8facd641
 	google.golang.org/grpc v1.71.1
 )
 

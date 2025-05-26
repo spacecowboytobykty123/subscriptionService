@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	bckt "github.com/spacecowboytobykty123/bucketProto/gen/go/bucket"
-	subs "github.com/spacecowboytobykty123/subsProto/proto/gen/go/subscription"
+	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	bcktgrpc "subscriptionMService/internal/clients/bucket/grpc"

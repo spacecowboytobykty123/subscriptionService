@@ -5,7 +5,7 @@ import (
 	"flag"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	_ "github.com/lib/pq"
-	subs "github.com/spacecowboytobykty123/subsProto/proto/gen/go/subscription"
+	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"net/http"
@@ -131,7 +131,7 @@ func runHTTP(grpcPort int, logger *jsonlog.Logger) {
 			"message": "failed to start HTTP gateway",
 		})
 	}
-	fs := http.FileServer(http.Dir("../subsProto/proto/gen/swagger")) // path where swagger.json is output
+	fs := http.FileServer(http.Dir("C:\\Users\\Еркебулан\\GolandProjects\\subsProto\\gen\\swagger")) // path where swagger.json is output
 	http.Handle("/swagger/", http.StripPrefix("/swagger/", fs))
 	http.Handle("/", mux)
 

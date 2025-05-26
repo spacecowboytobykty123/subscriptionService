@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/lib/pq"
-	subs "github.com/spacecowboytobykty123/subsProto/proto/gen/go/subscription"
+	subs "github.com/spacecowboytobykty123/subsProto/gen/go/subscription"
 	"time"
 )
 
