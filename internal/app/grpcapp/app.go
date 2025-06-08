@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"net"
-	"strconv"
 	"strings"
 	"subscriptionMService/internal/contextkeys"
 	subgrpc "subscriptionMService/internal/grpc/subscription"
@@ -48,20 +47,24 @@ func UnaryJWTInterceptor(secret []byte) grpc.UnaryServerInterceptor {
 		})
 
 		if err != nil || !token.Valid {
+			println(err.Error())
 			return nil, status.Error(codes.Unauthenticated, "invalid token")
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
+		fmt.Printf("Claims: %+v", claims)
 		if !ok {
 			return nil, status.Error(codes.Internal, "cannot parse claims")
 		}
 
-		subStr, ok := claims["sub"].(string)
+		// Attempt to get the user_id from claims
+		userIDFloat, ok := claims["user_id"].(float64)
 		if !ok {
-			return nil, status.Error(codes.Internal, "user ID not found in token")
+			return nil, status.Error(codes.Internal, "user ID not found or invalid type in token")
 		}
 
-		userID, err := strconv.ParseInt(subStr, 10, 64)
+		// Convert to int64
+		userID := int64(userIDFloat)
 		if err != nil {
 			return nil, status.Error(codes.Internal, "invalid user ID format")
 		}
@@ -74,7 +77,7 @@ func UnaryJWTInterceptor(secret []byte) grpc.UnaryServerInterceptor {
 
 func New(log *jsonlog.Logger, port int, subService subgrpc.Subscription) *App {
 	gRPCServer := grpc.NewServer(
-		grpc.UnaryInterceptor(UnaryJWTInterceptor([]byte("secretKey"))),
+		grpc.UnaryInterceptor(UnaryJWTInterceptor([]byte("test-secret"))),
 	)
 
 	subgrpc.Register(gRPCServer, subService)
